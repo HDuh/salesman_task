@@ -18,16 +18,24 @@ class City:
 
 
 class Route:
-    def __init__(self, address_list):
-        self.address_list: list[City] = address_list
-        self.calculated = False  # показывает, если матрица уже посчитана
-        self.current_matrix = None  # хранение посчитанной матрицы
-        self.num_of_adr = len(self.address_list)
+    def __init__(self, address_list=None, current_matrix=None):
+        if address_list:
+            self.address_list: list[City] = address_list
+            self.calculated = False  # показывает, если матрица уже посчитана
+            self.num_of_adr = len(self.address_list)  # кол-во адресов
+            self.current_matrix = current_matrix  # хранение посчитанной матрицы
+
+        elif current_matrix:
+            self.current_matrix = current_matrix  # хранение посчитанной матрицы
+            self.calculated = True  # показывает, если матрица уже посчитана
+            self.num_of_adr = len(self.current_matrix)  # кол-во адресов
+
         self._H = 0  # локальная нижняя граница
         self._route = list()
+        self._distance = 0  # Общая дистанция пути
 
-        self._num_of_rows = [i for i in range(self.num_of_adr)]
-        self._num_of_columns = [i for i in range(self.num_of_adr)]
+        self.row_indexes = [i for i in range(self.num_of_adr)]
+        self.column_indexes = [i for i in range(self.num_of_adr)]
 
     @property
     def matrix(self) -> np.ndarray:
@@ -58,19 +66,16 @@ class Route:
 
     def print_matrix(self):
         matrix = self.current_matrix
-        rows_names = self._num_of_rows
-        column_names = self._num_of_columns
+        rows_names = self.row_indexes
+        column_names = self.column_indexes
 
         df = pd.DataFrame(matrix, index=rows_names, columns=column_names)
         print("Матрица: ")
         print(df)
 
-    def reduction(self):
+    def row_reduction(self):
         """
-        Нахождение минимума по строкам.
-        Редукция строк.
-        Нахождение минимума по столбцам.
-        Редукция столбцов.
+        Нахождение минимума по строкам -> Редукция строк.
         Обновляем локальную нижнюю границу.
         """
 
@@ -81,88 +86,94 @@ class Route:
             for i_elem in range(self.num_of_adr):
                 self.current_matrix[i_row][i_elem] -= row_min
 
+            print(f'{i_row} Row min: ', row_min)
+
+        self._distance += self._H
+
+    def column_reduction(self):
+        """
+        Нахождение минимума по столбцам -> Редукция столбцов.
+        Обновляем локальную нижнюю границу.
+        """
+
         # Вычитаем минимальный элемент в столбцах
         for i_column in range(self.num_of_adr):
             column_min = min(row[i_column] for row in self.current_matrix)
             self._H += column_min
             for i_elem in range(self.num_of_adr):
                 self.current_matrix[i_elem][i_column] -= column_min
+            print(f'{i_column} column min: ', column_min)
+        print('-' * 20)
+        print(f'H_0 = {self._H}')
+        print('-' * 20)
 
-    # Функция нахождения минимального элемента, не включая текущего
+    #
     def find_min_elem(self, lst, cur_index):
+        """ Функция нахождения минимального элемента, не включая текущего """
+
         return min(x for index, x in enumerate(lst) if index != cur_index)
-
-    def matrix_reduce(self, row_i: int, column_i: int) -> None:
-        print(f'Удаляем:\nстроку {row_i}'
-              f'\nстолбец {column_i}')
-        print(self._num_of_rows[column_i])
-        print(self._num_of_columns[row_i])
-
-        del self._num_of_rows[column_i]
-        del self._num_of_columns[row_i]
-        self.num_of_adr -= 1
-        self.current_matrix = np.delete(self.current_matrix, [row_i], 0)
-        self.current_matrix = np.delete(self.current_matrix, [column_i], 1)
 
     def evaluation_of_zero_cells(self):
         """
         Оцениваем нулевые клетки и ищем в матрице нулевую клетку с максимальной оценкой.
+        На выходе индекс максимальной оценки нулевой клетки
         """
         # максимальная оценка нулевой клетки
         zero_value = 0
         # её координаты в матрице
-        x = 0
-        y = 0
+        row_index = 0
+        column_index = 0
 
         tmp = 0
 
         for i_row in range(self.num_of_adr):
             for i_column in range(self.num_of_adr):
                 if self.current_matrix[i_row][i_column] == 0:
-                    tmp = self.find_min_elem(self.current_matrix[i_row], i_column) + self.find_min_elem(
-                        (row[i_column] for row in self.current_matrix), i_row)
-
-                    if tmp >= zero_value:
+                    min_in_cur_row = self.find_min_elem(self.current_matrix[i_row], i_column)
+                    min_in_cur_column = self.find_min_elem((row[i_column] for row in self.current_matrix), i_row)
+                    tmp = min_in_cur_row + min_in_cur_column
+                    if tmp > zero_value:
                         zero_value = tmp
-                        x = i_row
-                        y = i_column
+                        row_index = i_row
+                        column_index = i_column
 
-        # Находим нужный нам путь, записываем его в res и удаляем все ненужное
-        self._route.append(self._num_of_rows[y])
-        self._route.append(self._num_of_columns[x])
+        print('Row index:', row_index, 'Column index:', column_index, "value: ", zero_value)
 
-        # в клетку обратного пути устанавливаем inf,
-        # так как мы уже не будем возвращаться обратно из y в x.
-        self.current_matrix[x][y] = float('inf')
+        return row_index, column_index, zero_value
 
+    def supplement_the_route(self, row_index, column_index, zero_value):
+        self._route.append([self.row_indexes[row_index], self.row_indexes[column_index]])
+        self._distance += zero_value
+        print(f'New route = {self._route}')
+        print(f'h_0 = {self._H}')
+        print(f'distance: {self._distance}')
+        print(column_index)
 
-        print(self._H)
-        return y, x
+    def matrix_reduce(self, row_i: int, column_i: int) -> None:
+        print(f'Удаляем:\nстроку {self.row_indexes[row_i]}'
+              f'\nстолбец {self.column_indexes[column_i]}')
 
-    def run(self):
-        a = self.matrix
-        while True:
-            self.print_matrix()
-            self.reduction()
-            self.print_matrix()
-            print(self._route)
-            result = self.evaluation_of_zero_cells()
-            r.matrix_reduce(result[0], result[1])
-            if len(self.current_matrix) == 1: break
+        self.current_matrix[column_i][row_i] = float('inf')
+        del self.row_indexes[row_i]
+        del self.column_indexes[column_i]
+        self.num_of_adr -= 1
+        self.current_matrix = np.delete(self.current_matrix, [row_i], 0)
+        self.current_matrix = np.delete(self.current_matrix, [column_i], 1)
 
-        print(self._H)
-        print(self._route)
+    # def run(self):
+    #     a = self.matrix
+    #     while True:
+    #         self.print_matrix()
+    #         self.reduction()
+    #         self.print_matrix()
+    #         print(self._route)
+    #         result = self.evaluation_of_zero_cells()
+    #         r.matrix_reduce(result[0], result[1])
+    #         if len(self.current_matrix) == 1: break
+    #
+    #     print(self._H)
+    #     print(self._route)
 
 
 if __name__ == '__main__':
-    c0 = City(0, 2)
-    c1 = City(2, 5)
-    c2 = City(5, 2)
-    c3 = City(6, 6)
-    c4 = City(8, 3)
-
-    r = Route([c0, c1, c2, c3, c4])
-
-    r.run()
-
-
+    pass

@@ -129,8 +129,8 @@ class Route:
 
     def route_graph(self) -> None:
 
-        plt.title(f'Общий путь = {self._total_distance}\n'
-                  f'Всего адресов: {self.number_of_points - 1}', size=15)
+        plt.title(f'Общий путь: {round(self._total_distance, 3)}, Всего адресов: {self.number_of_points - 1}\n'
+                  f'(не включая почтовое отделение)', size=12)
         X1 = [self._addresses[self._route[i]].coordinate[0] for i in range(0, self.number_of_points)]
         Y1 = [self._addresses[self._route[i]].coordinate[1] for i in range(0, self.number_of_points)]
 
@@ -143,6 +143,7 @@ class Route:
                                                                           'почтового отделения')
         plt.legend(loc='best')
         plt.grid(True)
+        plt.xlabel(f'Маршрут: {self._route}', fontsize='large', fontweight='bold')
         plt.show()
 
 
@@ -152,10 +153,11 @@ if __name__ == '__main__':
                  Point(5, 2), Point(6, 6),
                  Point(8, 3)]
 
+    # инициализация класса, для потроения марщрута
     r = Route(ADDRESSES)
-    # построить маршрут
+
+    # построение маршрута
     r.route_calculate()
 
-    # нарисовать маршрут
+    # отрисовка маршрута
     r.route_graph()
-    print(r.matrix)
